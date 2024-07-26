@@ -17,11 +17,23 @@
   
 
 <script>
-document.getElementById('runCommand').addEventListener('click', async () => {
-  const command = document.getElementById('commandRoRun').value;
-  const result = "placeholder";
-  document.getElementById('commandExecutionResults').value = result;
-});
+  let wasmModule;
+  async function loadWasmModule() {
+    const response = await fetch('wasm32-pthread/DRAWEXE.wasm');
+    const buffer = await response.arrayBuffer();
+    const module = await WebAssembly.compile(buffer);
+    const instance = await WebAssembly.instantiate(module);
+    wasmModule = instance.exports;
+  }
+
+  document.getElementById('runCommand').addEventListener('click', async () => {
+    if (!wasmModule) {
+      await loadWasmModule();
+    }
+    const command = document.getElementById('commandRoRun').value;
+    const result = wasmModule.executeCommand(command);
+    document.getElementById('commandExecutionResults').value = result;
+  });
 </script>
 
 </body>
