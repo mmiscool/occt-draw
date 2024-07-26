@@ -16,15 +16,8 @@
   <textarea id="commandExicutionResults"></textarea>
   <hr>
   
-<script type="text/javascript" src="js/drawxterm.js"   charset="utf-8"></script>
 
 <script>
-createDRAWEXE().then ((theModule) =>
-{
-  //DRAWEXE.eval ("dversion");
-  //DRAWEXE.terminalPasteScript ("dversion");
-});
-
 document.getElementById('runCommand').addEventListener('click', async () => {
   const command = document.getElementById('commandRoRun').value;
   const result = await DRAWEXE.callDrawCommand(command);
