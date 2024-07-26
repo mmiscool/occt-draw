@@ -1234,6 +1234,36 @@ class DrawTerm
   }
 //#endregion
 
+  /**
+   * Async function to call a draw command and return the output as a string.
+   * @param {string} commandToSend - The command to send to the draw terminal.
+   * @returns {Promise<string>} - The output of the command.
+   */
+  async callDrawCommand(commandToSend) {
+    let output = '';
+    const originalPrint = this.print;
+    const originalPrintErr = this.printErr;
+
+    this.print = (text) => {
+      output += text + '\n';
+    };
+
+    this.printErr = (text) => {
+      output += text + '\n';
+    };
+
+    try {
+      await this.termEvaluateCommand(commandToSend);
+    } catch (error) {
+      output += error.message + '\n';
+    } finally {
+      this.print = originalPrint;
+      this.printErr = originalPrintErr;
+    }
+
+    return output;
+  }
+
 };
 
 //! Create WebAssembly module instance and wait.
