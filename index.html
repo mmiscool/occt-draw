@@ -23,7 +23,18 @@
       const response = await fetch('wasm32-pthread/DRAWEXE.wasm');
       const buffer = await response.arrayBuffer();
       const module = await WebAssembly.compile(buffer);
-      const imports = {}; // Add an empty imports object
+      const imports = {
+        env: {
+          memory: new WebAssembly.Memory({ initial: 256, maximum: 256 }),
+          table: new WebAssembly.Table({ initial: 0, element: 'anyfunc' }),
+          abort: () => console.log('Abort!'),
+          _emscripten_memcpy_big: (dest, src, num) => {
+            const destView = new Uint8Array(wasmModule.memory.buffer, dest, num);
+            const srcView = new Uint8Array(wasmModule.memory.buffer, src, num);
+            destView.set(srcView);
+          }
+        }
+      };
       const instance = await WebAssembly.instantiate(module, imports);
       wasmModule = instance.exports;
     } catch (error) {
@@ -35,9 +46,13 @@
     if (!wasmModule) {
       await loadWasmModule();
     }
-    const command = document.getElementById('commandRoRun').value;
-    const result = wasmModule.executeCommand(command);
-    document.getElementById('commandExecutionResults').value = result;
+    if (wasmModule && wasmModule.executeCommand) {
+      const command = document.getElementById('commandRoRun').value;
+      const result = wasmModule.executeCommand(command);
+      document.getElementById('commandExecutionResults').value = result;
+    } else {
+      console.error('WebAssembly module is not properly initialized.');
+    }
   });
 </script>
 
