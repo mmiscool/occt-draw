@@ -12,15 +12,15 @@
   <textarea id="commandRoRun">pload all</textarea>
   <button id="runCommand">run</button>
   <hr>
-  <textarea id="commandExicutionResults"></textarea>
+  <textarea id="commandExecutionResults"></textarea>
   <hr>
   
 
 <script>
 document.getElementById('runCommand').addEventListener('click', async () => {
   const command = document.getElementById('commandRoRun').value;
-  const result = await DRAWEXE.callDrawCommand(command);
-  document.getElementById('commandExicutionResults').value = result;
+  const result = "placeholder";
+  document.getElementById('commandExecutionResults').value = result;
 });
 </script>
 
