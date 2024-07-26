@@ -24,6 +24,12 @@ createDRAWEXE().then ((theModule) =>
   //DRAWEXE.eval ("dversion");
   //DRAWEXE.terminalPasteScript ("dversion");
 });
+
+document.getElementById('runCommand').addEventListener('click', async () => {
+  const command = document.getElementById('commandRoRun').value;
+  const result = await DRAWEXE.callDrawCommand(command);
+  document.getElementById('commandExicutionResults').value = result;
+});
 </script>
 
 </body>
