@@ -19,11 +19,15 @@
 <script>
   let wasmModule;
   async function loadWasmModule() {
-    const response = await fetch('wasm32-pthread/DRAWEXE.wasm');
-    const buffer = await response.arrayBuffer();
-    const module = await WebAssembly.compile(buffer);
-    const instance = await WebAssembly.instantiate(module);
-    wasmModule = instance.exports;
+    try {
+      const response = await fetch('wasm32-pthread/DRAWEXE.wasm');
+      const buffer = await response.arrayBuffer();
+      const module = await WebAssembly.compile(buffer);
+      const instance = await WebAssembly.instantiate(module);
+      wasmModule = instance.exports;
+    } catch (error) {
+      console.error('Error loading WebAssembly module:', error);
+    }
   }
 
   document.getElementById('runCommand').addEventListener('click', async () => {
