@@ -5,3 +5,7 @@ node_modules
 validation-report.json
 validation-status.json
 deploy.sh
+3rdparty/wasm_draco_build.bat
+3rdparty/wasm_freetype_build.sh
+3rdparty/wasm_tcl_build.sh
+server.py
