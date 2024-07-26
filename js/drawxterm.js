@@ -11,6 +11,39 @@ if (document.currentScript && document.currentScript.src.endsWith ("js/drawxterm
 }
 
 /**
+ * Class to manage a queue of draw commands.
+ */
+class DrawCommandQueue {
+  constructor() {
+    this.queue = [];
+  }
+
+  /**
+   * Add a command to the queue.
+   * @param {string} command - The command to add.
+   */
+  enqueue(command) {
+    this.queue.push(command);
+  }
+
+  /**
+   * Remove and return the first command from the queue.
+   * @returns {string} - The first command in the queue.
+   */
+  dequeue() {
+    return this.queue.shift();
+  }
+
+  /**
+   * Check if the queue is empty.
+   * @returns {boolean} - True if the queue is empty, false otherwise.
+   */
+  isEmpty() {
+    return this.queue.length === 0;
+  }
+}
+
+/**
  * Main class interface - used as a base for initialization of WebAssembly module.
  */
 class DrawTerm
