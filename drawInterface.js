@@ -328,7 +328,10 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteWarning(theText) {
-        this.terminalWriteMultiline(theText);
+        if (theText && theText.length > 1 && this.commandsErrors) {
+            this.commandsErrors.push(theText);
+        }
+        //this.terminalWriteMultiline(theText);
     }
 
     /**
@@ -336,7 +339,7 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteError(theText) {
-        if (theText && theText.length > 1 && this.commandsResult) {
+        if (theText && theText.length > 1 && this.commandsErrors) {
             this.commandsErrors.push(theText);
         }
         //this.terminalWriteMultiline(theText);
@@ -400,10 +403,16 @@ class DrawTerm {
             }
             if (aRes) {
                 const result = this.commandsResult.map(c => c.replaceAll(/Draw\[\d\]>/gm, "").trim())
-                    .filter(c => c !== "")
+                    .filter(c => c && c !== "")
+                    .join("\n");
+
+                const errors = this.commandsErrors
+                    .filter(c => c && c !== "")
                     .join("\n");
                 this.commandsResult = []
-                return Promise.resolve(result);
+                this.commandsErrors = []
+                1
+                return Promise.resolve({result, errors});
             }
             return Promise.reject(new Error("Command evaluation failed"));
         } catch (theErr) {
