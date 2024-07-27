@@ -14,7 +14,6 @@ class DrawCommand {
     constructor(theCmd, theToEcho) {
         this.command = theCmd;
         this.toEcho = theToEcho;
-        this._myNext = null;
     }
 };
 
@@ -54,8 +53,7 @@ class DrawCommandQueue {
             this._myLast._myNext = theCmd;
             this._myLast = theCmd;
             this._myLength += 1;
-        }
-        else {
+        } else {
             this._myFirst = theCmd;
             this._myLast = theCmd;
             this._myLength = 1;
@@ -85,9 +83,9 @@ class DrawCommandQueue {
 
 // prefix for DRAWEXE.data location
 let _DRAWTERM_BASE_PREFIX = "/";
-if (document.currentScript && document.currentScript.src.endsWith("js/drawxterm.js")) {
+if (document.currentScript && document.currentScript.src.endsWith("js/drawInterface.js")) {
     // note - this will not work properly while importing module
-    _DRAWTERM_BASE_PREFIX = document.currentScript.src.substring(0, document.currentScript.src.length - "js/drawxterm.js".length);
+    _DRAWTERM_BASE_PREFIX = document.currentScript.src.substring(0, document.currentScript.src.length - "js/drawInterface.js".length);
 }
 
 /**
@@ -95,7 +93,7 @@ if (document.currentScript && document.currentScript.src.endsWith("js/drawxterm.
  */
 class DrawTerm {
 
-    //#region Main interface
+//#region Main interface
 
     /**
      * Check browser support.
@@ -111,8 +109,8 @@ class DrawTerm {
                     return new WebAssembly.Instance(aDummyModule) instanceof WebAssembly.Instance;
                 }
             }
+        } catch (theErr) {
         }
-        catch (theErr) { }
         return false;
     }
 
@@ -128,25 +126,26 @@ class DrawTerm {
      * Init Module and load WASM file.
      */
     async init() {
-
-
         let anErr = null;
         this.setBasePrefix(_DRAWTERM_BASE_PREFIX);
 
         let aBackProps = {};
-        for (var aPropIter in this) { aBackProps[aPropIter] = this[aPropIter]; }
+        for (var aPropIter in this) {
+            aBackProps[aPropIter] = this[aPropIter];
+        }
 
         try {
             await this.wasmLoad();
             //await createDRAWEXE (this);
-        }
-        catch (theErr1) {
+        } catch (theErr1) {
             let toLoadThreads = this._myToPreferPthread && this.isAllowMultithreading();
             if (toLoadThreads) {
                 try {
                     // remove partially initialized fields
                     for (var aPropIter in this) {
-                        if (aBackProps[aPropIter] === undefined) { delete this[aPropIter]; }
+                        if (aBackProps[aPropIter] === undefined) {
+                            delete this[aPropIter];
+                        }
                     }
 
                     this._myIsWasmLoaded = false;
@@ -154,12 +153,10 @@ class DrawTerm {
                     await this.wasmLoad();
 
                     this.terminalWriteError(theErr1 + " [fallback to '" + this._myWasmBuild + "']");
-                }
-                catch (theErr2) {
+                } catch (theErr2) {
                     anErr = theErr2;
                 }
-            }
-            else {
+            } else {
                 anErr = theErr1;
             }
         }
@@ -180,23 +177,22 @@ class DrawTerm {
      */
     async wasmLoad() {
         let toLoadThreads = this._myToPreferPthread && this.isAllowMultithreading();
-        this._myWasmBuild = "./";
+        this._myWasmBuild = toLoadThreads ? "wasm32-pthread" : "wasm32";
         this.FS = null;
         try {
             this.mainScriptUrlOrBlob = './DRAWEXE.js'; // for pthreads
-            let aModPath = this.locateFile("./DRAWEXE.js", "");
+            let aModPath = this.locateFile("DRAWEXE.js", "");
             let aRet = await fetch(aModPath);
             let aSrc = await aRet.text();
             if (!aRet.ok) {
                 return Promise.reject(new Error("Fail to fetch DRAWEXE.js; response finished with " + aRet.status));
             }
             aSrc += '\nexport default createDRAWEXE';
-            const aBlob = new Blob([aSrc], { type: 'text/javascript' });
-            let aModCreator = await import(URL.createObjectURL(aBlob));
+            const aBlob = new Blob([aSrc], {type: 'text/javascript'});
+            let aModCreator = await import (URL.createObjectURL(aBlob));
             await aModCreator.default(this);
             return Promise.resolve(true);
-        }
-        catch (theError) {
+        } catch (theError) {
             return Promise.reject(new Error("WebAssembly '" + this._myWasmBuild + "' initialization has failed:\r\n" + theError));
         }
     }
@@ -207,9 +203,6 @@ class DrawTerm {
     constructor() {
         //#region Class properties
         // use old initialization style for compatibility with old browsers
-        this._myTerm = null;          // Terminal object
-        this._myTermHello = "Draw";   // Terminal hello message
-        this._myTermInCounter = 0;    // Number of manually entered into Terminal commands
         this._myTermLine = "";        // Terminal input
         this._myTermLineCharPos = 0;  // Terminal input character position (relative to the tail)
         this._myTermHistory = [];     // Commands input history (activated by up/down arrows)
@@ -240,6 +233,16 @@ class DrawTerm {
         this.printMessage = this.printMessage.bind(this);
         this.locateFile = this.locateFile.bind(this);
         //#endregion
+
+        if (!this.isWasmSupported()) {
+            this.terminalWrite("\x1B[31;1mBrowser is too old - WebAssembly support is missing!\n\r"
+                + "Please check updates or install a modern browser.\x1B[0m\n\r");
+            return;
+        } else {
+            setTimeout(() => {
+                this._termWasmLoadProgress()
+            }, 1000);
+        }
 
     }
 
@@ -273,22 +276,16 @@ class DrawTerm {
         this._myToPreferPthread = theToPrefer;
     }
 
-    /**
-     * Clear terminal.
-     */
-    terminalClear() {
-        if (this._myTerm !== null) {
-            this._myTerm.clear();
-        }
-    }
+    commandsResult = []
+    commandsErrors = []
 
     /**
      * Print text into terminal.
      * @param[in] {string} theText text to print
      */
     terminalWrite(theText) {
-        if (this._myTerm !== null) {
-            this._myTerm.write(theText);
+        if (theText && theText.length > 4 && this.commandsResult) {
+            this.commandsResult.push(theText);
         }
     }
 
@@ -297,8 +294,8 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteMultiline(theText) {
-        if (this._myTerm !== null) {
-            this._myTerm.write(theText.replace(/\n/g, '\n\r'));
+        if (theText && theText.length > 1 && this.commandsResult) {
+            this.commandsResult.push(theText);
         }
     }
 
@@ -307,7 +304,7 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteLine(theText) {
-        this.terminalWrite("\n\r" + theText);
+        this.terminalWrite(theText);
     }
 
     /**
@@ -315,7 +312,7 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteTrace(theText) {
-        this.terminalWriteMultiline("\n\r\x1B[33m" + theText + "\x1B[0m");
+        this.terminalWriteMultiline(theText);
     }
 
     /**
@@ -323,7 +320,7 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteInfo(theText) {
-        this.terminalWriteMultiline("\n\r\x1B[32;1m" + theText + "\x1B[0m");
+        this.terminalWriteMultiline(theText);
     }
 
     /**
@@ -331,7 +328,7 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteWarning(theText) {
-        this.terminalWriteMultiline("\n\r\x1B[33;1m" + theText + "\x1B[0m");
+        this.terminalWriteMultiline(theText);
     }
 
     /**
@@ -339,7 +336,10 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     terminalWriteError(theText) {
-        this.terminalWriteMultiline("\n\r\x1B[31;1m" + theText + "\x1B[0m");
+        if (theText && theText.length > 1 && this.commandsResult) {
+            this.commandsErrors.push(theText);
+        }
+        //this.terminalWriteMultiline(theText);
     }
 
     /**
@@ -347,8 +347,9 @@ class DrawTerm {
      * @param[in] {string} theLine text to print
      */
     terminalPrintInputLine(theLine) {
-        this.terminalWrite("\n\r");
-        this.terminalWrite("\x1B[32;1m" + this._myTermHello + "[" + (++this._myTermInCounter) + "]>\x1B[0m ");
+        if (this.commandsResult) {
+            this.commandsResult.push(theLine);
+        }
     }
 
     /**
@@ -356,12 +357,7 @@ class DrawTerm {
      * @param[in] {string} theCommands commands as a line-separated string
      */
     terminalPasteScript(theCommands) {
-        if (this._myTerm !== null) {
-            if (!theCommands.endsWith("\n")) {
-                theCommands += "\n";
-            }
-            this._myTerm.paste(theCommands);
-        }
+        console.log(theCommands)
     }
 
     /**
@@ -370,7 +366,6 @@ class DrawTerm {
      * @return {Promise} evaluation result as promise
      */
     termEvaluateCommand(theCmd) {
-        //console.warn(" @@ termEvaluateCommand (" + theCmd + ")");
         if (theCmd === "") {
             return Promise.resolve(true);
         }
@@ -383,20 +378,15 @@ class DrawTerm {
             let aRes = true;
             if (theCmd.startsWith("jsdownload ")) {
                 aRes = this._commandJsdownload(theCmd.substring(11).trim());
-            }
-            else if (theCmd.startsWith("jsdown ")) {
+            } else if (theCmd.startsWith("jsdown ")) {
                 aRes = this._commandJsdownload(theCmd.substring(7).trim());
-            }
-            else if (theCmd.startsWith("download ")) {
+            } else if (theCmd.startsWith("download ")) {
                 aRes = this._commandJsdownload(theCmd.substring(9).trim());
-            }
-            else if (theCmd.startsWith("jsupload ")) {
+            } else if (theCmd.startsWith("jsupload ")) {
                 return this._commandJsupload(theCmd.substring(9).trim());
-            }
-            else if (theCmd.startsWith("upload ")) {
+            } else if (theCmd.startsWith("upload ")) {
                 return this._commandJsupload(theCmd.substring(7).trim());
-            }
-            else if (theCmd.startsWith("jsasync ")) {
+            } else if (theCmd.startsWith("jsasync ")) {
                 return new Promise((theResolve, theReject) => {
                     this.evalAsyncCompleted = (theResult) => {
                         this.evalAsyncCompleted = undefined;
@@ -405,16 +395,18 @@ class DrawTerm {
                     this.evalAsyncCompleted = this.evalAsyncCompleted.bind(this);
                     this.evalAsync(theCmd.substring(8).trim());
                 });
-            }
-            else {
+            } else {
                 this.eval(theCmd);
             }
             if (aRes) {
-                return Promise.resolve(true);
+                const result = this.commandsResult.map(c => c.replaceAll(/Draw\[\d\]>/gm, "").trim())
+                    .filter(c => c !== "")
+                    .join("\n");
+                this.commandsResult = []
+                return Promise.resolve(result);
             }
             return Promise.reject(new Error("Command evaluation failed"));
-        }
-        catch (theErr) {
+        } catch (theErr) {
             return Promise.reject(new InternalError(theErr));
         }
     }
@@ -426,7 +418,7 @@ class DrawTerm {
      * @param[in] {string} theType data MIME type
      */
     downloadDataFile(theData, theFileName, theType) {
-        let aFileBlob = new Blob([theData], { type: theType });
+        let aFileBlob = new Blob([theData], {type: theType});
         let aLinkElem = document.createElement("a");
         let anUrl = URL.createObjectURL(aFileBlob);
         aLinkElem.href = anUrl;
@@ -459,7 +451,9 @@ class DrawTerm {
         }
 
         const aCheckStatusFunc = function (theResponse) {
-            if (!theResponse.ok) { throw new Error("HTTP " + theResponse.status + " - " + theResponse.statusText + " (URL: '" + theFileUrl + "')"); }
+            if (!theResponse.ok) {
+                throw new Error("HTTP " + theResponse.status + " - " + theResponse.statusText + " (URL: '" + theFileUrl + "')");
+            }
             return theResponse;
         };
 
@@ -475,11 +469,15 @@ class DrawTerm {
                         this.FS.createPreloadedFile(!aFilePath.startsWith("/") ? this.FS.cwd() : "/",
                             aFilePath,
                             aDataArray, true, true,
-                            () => { theResolve(true); this.terminalPrintInputLine(""); },
-                            () => { theReject(new Error("Preload '" + aFilePath + "' failed")); },
+                            () => {
+                                theResolve(true);
+                                this.terminalPrintInputLine("");
+                            },
+                            () => {
+                                theReject(new Error("Preload '" + aFilePath + "' failed"));
+                            },
                             true); // file is already created
-                    }
-                    else {
+                    } else {
                         this.terminalPrintInputLine("");
                         theResolve(true);
                     }
@@ -517,8 +515,8 @@ class DrawTerm {
                     }
                 }, 1000); // wait for a second as focus and onchange events happen simultaneously
             };
-            window.addEventListener('focus', aCancelListener, { once: true });
-            window.addEventListener('touchend', aCancelListener, { once: true });
+            window.addEventListener('focus', aCancelListener, {once: true});
+            window.addEventListener('touchend', aCancelListener, {once: true});
 
             this._myFileInput.onchange = () => {
                 hasResult = true;
@@ -545,11 +543,15 @@ class DrawTerm {
                         this.FS.createPreloadedFile(!aFilePath.startsWith("/") ? this.FS.cwd() : "/",
                             aFilePath,
                             aDataArray, true, true,
-                            () => { theResolve(true); this.terminalPrintInputLine(""); },
-                            () => { theReject(new Error("Preload failed")); },
+                            () => {
+                                theResolve(true);
+                                this.terminalPrintInputLine("");
+                            },
+                            () => {
+                                theReject(new Error("Preload failed"));
+                            },
                             true); // file is already created
-                    }
-                    else {
+                    } else {
                         this.terminalPrintInputLine("");
                         theResolve(true);
                     }
@@ -559,17 +561,22 @@ class DrawTerm {
             this._myFileInput.click();
         })
     }
-    //#endregion
 
-    //!#region Internal methods
+//#endregion
+
+//!#region Internal methods
 
     /**
      * Stab indicating some progress while "DRAWEXE.wasm" is not yet loaded.
      */
     _termWasmLoadProgress() {
-        if (this._myIsWasmLoaded) { return; }
+        if (this._myIsWasmLoaded) {
+            return;
+        }
         this.terminalWrite(".");
-        setTimeout(() => { this._termWasmLoadProgress() }, 1000);
+        setTimeout(() => {
+            this._termWasmLoadProgress()
+        }, 1000);
     }
 
     /**
@@ -581,125 +588,123 @@ class DrawTerm {
         switch (theEvent.keyCode) {
             case 38: // ArrowUp
             case 40: // ArrowDown
-                {
-                    // override up/down arrows to navigate through input history
-                    let aDir = theEvent.keyCode === 38 ? -1 : 1;
-                    if (theEvent.type !== "keydown") {
-                        return false;
-                    }
-
-                    // clear current input
-                    for (; this._myTermLine.length > 0;) {
-                        this.terminalWrite('\b \b');
-                        this._myTermLine = this._myTermLine.substring(0, this._myTermLine.length - 1);
-                    }
-                    if (this._myTermHistory.length <= 0) {
-                        return false;
-                    }
-
-                    if (this._myTermHistoryPos != -1) {
-                        this._myTermHistoryPos += aDir;
-                        this._myTermHistoryPos = Math.max(Math.min(this._myTermHistoryPos, this._myTermHistory.length - 1), 0);
-                    }
-                    else {
-                        this._myTermHistoryPos = this._myTermHistory.length - 1;
-                    }
-
-                    let aHist = this._myTermHistory[this._myTermHistoryPos];
-                    this._myTermLine = aHist;
-                    this._myTermLineCharPos = 0;
-                    this.terminalWrite(aHist);
+            {
+                // override up/down arrows to navigate through input history
+                let aDir = theEvent.keyCode === 38 ? -1 : 1;
+                if (theEvent.type !== "keydown") {
                     return false;
                 }
+
+                // clear current input
+                for (; this._myTermLine.length > 0;) {
+                    this.terminalWrite('\b \b');
+                    this._myTermLine = this._myTermLine.substring(0, this._myTermLine.length - 1);
+                }
+                if (this._myTermHistory.length <= 0) {
+                    return false;
+                }
+
+                if (this._myTermHistoryPos != -1) {
+                    this._myTermHistoryPos += aDir;
+                    this._myTermHistoryPos = Math.max(Math.min(this._myTermHistoryPos, this._myTermHistory.length - 1), 0);
+                } else {
+                    this._myTermHistoryPos = this._myTermHistory.length - 1;
+                }
+
+                let aHist = this._myTermHistory[this._myTermHistoryPos];
+                this._myTermLine = aHist;
+                this._myTermLineCharPos = 0;
+                this.terminalWrite(aHist);
+                return false;
+            }
             case 37: // ArrowLeft
-                {
-                    if (theEvent.type === "keydown") {
-                        if (this._myTermLineCharPos > -this._myTermLine.length) {
-                            --this._myTermLineCharPos;
-                            this.terminalWrite("\x1b[1D");
-                        }
+            {
+                if (theEvent.type === "keydown") {
+                    if (this._myTermLineCharPos > -this._myTermLine.length) {
+                        --this._myTermLineCharPos;
+                        this.terminalWrite("\x1b[1D");
                     }
-                    return false;
                 }
+                return false;
+            }
             case 39: // ArrowRight
-                {
-                    if (theEvent.type === "keydown") {
-                        if (this._myTermLineCharPos < 0) {
-                            ++this._myTermLineCharPos;
-                            this.terminalWrite("\x1b[1C");
-                        }
-                    }
-                    return false;
-                }
-            case 8: // Backspace
-                {
-                    if (theEvent.type !== "keydown") {
-                        return false;
-                    }
-
+            {
+                if (theEvent.type === "keydown") {
                     if (this._myTermLineCharPos < 0) {
-                        // remove character in the middle
-                        if (this._myTermLineCharPos > -this._myTermLine.length) {
-                            let aFront = this._myTermLine.substring(0, this._myTermLine.length + this._myTermLineCharPos - 1);
-                            let aTail = this._myTermLine.substring(this._myTermLine.length + this._myTermLineCharPos);
-                            this.terminalWrite("\b" + aTail + " ");
-                            this.terminalWrite("\x1b[" + (-this._myTermLineCharPos + 1) + "D");
-                            this._myTermLine = aFront + aTail;
-                        }
-                    }
-                    else if (this._myTermLine.length > 0) {
-                        this.terminalWrite('\b \b');
-                        this._myTermLine = this._myTermLine.substring(0, this._myTermLine.length - 1);
-                    }
-                    return false;
-                }
-            case 46: // Delete
-                {
-                    if (theEvent.type === "keydown"
-                        && this._myTermLineCharPos < 0) {
-                        let aFront = this._myTermLine.substring(0, this._myTermLine.length + this._myTermLineCharPos);
-                        let aTail = this._myTermLine.substring(this._myTermLine.length + this._myTermLineCharPos + 1);
-                        this.terminalWrite(aTail + " ");
-                        this.terminalWrite("\x1b[" + (-this._myTermLineCharPos) + "D");
-                        this._myTermLine = aFront + aTail;
                         ++this._myTermLineCharPos;
+                        this.terminalWrite("\x1b[1C");
                     }
+                }
+                return false;
+            }
+            case 8: // Backspace
+            {
+                if (theEvent.type !== "keydown") {
                     return false;
                 }
+
+                if (this._myTermLineCharPos < 0) {
+                    // remove character in the middle
+                    if (this._myTermLineCharPos > -this._myTermLine.length) {
+                        let aFront = this._myTermLine.substring(0, this._myTermLine.length + this._myTermLineCharPos - 1);
+                        let aTail = this._myTermLine.substring(this._myTermLine.length + this._myTermLineCharPos);
+                        this.terminalWrite("\b" + aTail + " ");
+                        this.terminalWrite("\x1b[" + (-this._myTermLineCharPos + 1) + "D");
+                        this._myTermLine = aFront + aTail;
+                    }
+                } else if (this._myTermLine.length > 0) {
+                    this.terminalWrite('\b \b');
+                    this._myTermLine = this._myTermLine.substring(0, this._myTermLine.length - 1);
+                }
+                return false;
+            }
+            case 46: // Delete
+            {
+                if (theEvent.type === "keydown"
+                    && this._myTermLineCharPos < 0) {
+                    let aFront = this._myTermLine.substring(0, this._myTermLine.length + this._myTermLineCharPos);
+                    let aTail = this._myTermLine.substring(this._myTermLine.length + this._myTermLineCharPos + 1);
+                    this.terminalWrite(aTail + " ");
+                    this.terminalWrite("\x1b[" + (-this._myTermLineCharPos) + "D");
+                    this._myTermLine = aFront + aTail;
+                    ++this._myTermLineCharPos;
+                }
+                return false;
+            }
             case 33: // PageUp
             case 34: // PageDown
-                {
-                    if (theEvent.type === "keydown") {
-                        this._myTerm.scrollPages(theEvent.keyCode == 33 ? -1 : 1);
-                    }
-                    return false;
+            {
+                if (theEvent.type === "keydown") {
+                    this._myTerm.scrollPages(theEvent.keyCode == 33 ? -1 : 1);
                 }
+                return false;
+            }
             case 35: // End
-                {
-                    if (theEvent.type === "keydown") {
-                        if (this._myTermLineCharPos < 0) {
-                            let aDelta = -this._myTermLineCharPos;
-                            this._myTermLineCharPos = 0;
-                            this.terminalWrite("\x1b[" + aDelta + "C");
-                        }
+            {
+                if (theEvent.type === "keydown") {
+                    if (this._myTermLineCharPos < 0) {
+                        let aDelta = -this._myTermLineCharPos;
+                        this._myTermLineCharPos = 0;
+                        this.terminalWrite("\x1b[" + aDelta + "C");
                     }
-                    return false;
                 }
+                return false;
+            }
             case 36: // Home
-                {
-                    if (theEvent.type === "keydown") {
-                        if (this._myTermLineCharPos > -this._myTermLine.length) {
-                            let aDelta = this._myTermLine.length + this._myTermLineCharPos;
-                            this._myTermLineCharPos = -this._myTermLine.length;
-                            this.terminalWrite("\x1b[" + aDelta + "D");
-                        }
+            {
+                if (theEvent.type === "keydown") {
+                    if (this._myTermLineCharPos > -this._myTermLine.length) {
+                        let aDelta = this._myTermLine.length + this._myTermLineCharPos;
+                        this._myTermLineCharPos = -this._myTermLine.length;
+                        this.terminalWrite("\x1b[" + aDelta + "D");
                     }
-                    return false;
                 }
+                return false;
+            }
             case 45: // insert
-                {
-                    return false;
-                }
+            {
+                return false;
+            }
             case 112: // F1
             case 113:
             case 114:
@@ -712,9 +717,9 @@ class DrawTerm {
             case 121:
             case 122:
             case 123: // F12
-                {
-                    return false;
-                }
+            {
+                return false;
+            }
         }
 
         // handle copy-paste via Ctrl+C and Ctrl+V
@@ -747,15 +752,13 @@ class DrawTerm {
                     if (aNbNewLines == 0) {
                         this.terminalWrite("\n\r> ");
                     }
-                }
-                else if (!this.isComplete(aCmd)) {
+                } else if (!this.isComplete(aCmd)) {
                     // handle incomplete Tcl input (missing closing bracket)
                     this._myTermLine += "\n\r";
                     if (aNbNewLines == 0) {
                         this.terminalWrite("\n\r> ");
                     }
-                }
-                else {
+                } else {
                     this._myTermLine = "";
                     this._termQueueCommand(aCmd, aNbNewLines != 0);
                     ++aNbNewLines;
@@ -771,8 +774,7 @@ class DrawTerm {
                     this.terminalWrite(aChar + aTail);
                     this.terminalWrite("\x1b[" + (-this._myTermLineCharPos) + "D");
                     this._myTermLine = aFront + aChar + aTail;
-                }
-                else {
+                } else {
                     // append character
                     if (aNbNewLines == 0) {
                         this.terminalWrite(aChar);
@@ -794,7 +796,9 @@ class DrawTerm {
         // (otherwise JavaScript will run all commands in one shot with hanging output)
         this._myCmdQueue.add(new DrawCommand(theCmd, theToEcho));
         if (this._myCmdQueue.extent() == 1) {
-            setTimeout(() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
+            setTimeout(() => {
+                this._termPopCommandFromQueue();
+            }, this._myCmdTimeout);
         }
     }
 
@@ -814,20 +818,25 @@ class DrawTerm {
         this.termEvaluateCommand(aCmd.command).then((theCmdStatus) => {
             this.terminalPrintInputLine("");
             if (!this._myCmdQueue.isEmpty()) {
-                setTimeout(() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
+                setTimeout(() => {
+                    this._termPopCommandFromQueue();
+                }, this._myCmdTimeout);
             }
         }).catch((theErr) => {
             //this.terminalPrintInputLine ("");
             this.terminalWriteError(theErr);
             this.terminalPrintInputLine("");
             if (!this._myCmdQueue.isEmpty()) {
-                setTimeout(() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
+                setTimeout(() => {
+                    this._termPopCommandFromQueue();
+                }, this._myCmdTimeout);
             }
         });
     }
-    //#endregion
 
-    //#region Additional Tcl commands implemented in JavaScript
+//#endregion
+
+//#region Additional Tcl commands implemented in JavaScript
 
     /**
      * Evaluate jsdownload command downloading file from emulated file system.
@@ -845,8 +854,7 @@ class DrawTerm {
         let aFileName = aFilePath;
         if (anArgs.length >= 2) {
             aFileName = anArgs[1];
-        }
-        else {
+        } else {
             let aPathSplit = aFilePath.split("/");
             if (aPathSplit.length > 1) {
                 aFileName = aPathSplit[aPathSplit.length - 1];
@@ -857,8 +865,7 @@ class DrawTerm {
         let aType = "application/octet-stream";
         if (aNameLower.endsWith(".png")) {
             aType = "image/png";
-        }
-        else if (aNameLower.endsWith(".jpg")
+        } else if (aNameLower.endsWith(".jpg")
             || aNameLower.endsWith(".jpeg")) {
             aType = "image/jpeg";
         }
@@ -867,8 +874,7 @@ class DrawTerm {
             this.terminalWriteLine("downloading file '" + aFileName + "' of size " + aData.length + " bytes...");
             this.downloadDataFile(aData, aFileName, aType);
             return true;
-        }
-        catch (theError) {
+        } catch (theError) {
             this.terminalWriteError("Error: file '" + aFilePath + "' cannot be read with " + theError);
             return false;
         }
@@ -909,8 +915,7 @@ class DrawTerm {
             let aFilePath = aDstList[aFileIter];
             if (aFileUrl === ".") {
                 aPromises.push(this.uploadFile(aFilePath, toPreload));
-            }
-            else {
+            } else {
                 aPromises.push(this.uploadUrl(aFileUrl, aFilePath, toPreload));
             }
         }
@@ -935,8 +940,7 @@ class DrawTerm {
 
                         if (nbFails === 0) {
                             theResolve(true);
-                        }
-                        else {
+                        } else {
                             theReject(new Error(aFailList));
                         }
                     });
@@ -944,17 +948,19 @@ class DrawTerm {
         }
         return Promise.all(aPromises);
     }
-    //#endregion
 
-    //#region WebAssembly module interface
+//#endregion
+
+//#region WebAssembly module interface
 
     /**
      * C++ std::cout callback redirecting to Terminal.
      * @param[in] {string} theText text to print
      */
     print(theText) {
-        console.warn(theText);
-        this.printMessage(theText, -1);
+        if (theText && theText.length > 0) {
+            this.printMessage(theText, -1);
+        }
     }
 
     /**
@@ -962,7 +968,6 @@ class DrawTerm {
      * @param[in] {string} theText text to print
      */
     printErr(theText) {
-        console.warn(theText);
         this.printMessage(theText, -1);
     }
 
@@ -972,7 +977,6 @@ class DrawTerm {
      * @param[in] {number} theGravity message gravity within 0..4 range
      */
     printMessage(theText, theGravity) {
-        //console.warn(" @@ printMessage (" + theText + ")");
         switch (theGravity) {
             case 0: // trace
                 this.terminalWriteTrace(theText);
@@ -1002,7 +1006,7 @@ class DrawTerm {
         //console.warn(" @@ locateFile(" + thePath + ", " + thePrefix + ")");
         // thePrefix is JS file directory - override location of our DRAWEXE.data
         //return thePrefix + thePath;
-        return "./" + thePath;
+        return this._myBasePrefix + this._myWasmBuild + "/" + thePath;
     }
 
     /**
@@ -1040,10 +1044,13 @@ class DrawTerm {
 
         this.terminalPrintInputLine("");
     }
-    //#endregion
+
+//#endregion
 
 };
 
 //! Create WebAssembly module instance and wait.
 var DRAWEXE = new DrawTerm();
-createDRAWEXE = function () { return DRAWEXE.init(); };
+createDRAWEXE = function () {
+    return DRAWEXE.init();
+};

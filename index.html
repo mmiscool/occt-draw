@@ -2,32 +2,50 @@
 <html lang=en-us>
 
 <head>
-  <meta charset=utf-8>
-  <meta content="text/html; charset=utf-8" http-equiv=Content-Type>
-  <title>OCCT Draw Harness</title>
+    <meta charset=utf-8>
+    <meta content="text/html; charset=utf-8" http-equiv=Content-Type>
+    <title>OCCT Draw Harness</title>
 </head>
 
 <body>
 
-  <canvas id=occViewerCanvas oncontextmenu=event.preventDefault() tabindex=-1
-    style="border:0 none;background-color:#000" width="409" height="409"></canvas>
+<canvas id=occViewerCanvas oncontextmenu=event.preventDefault() tabindex=-1
+        style="border:0 none;background-color:#000" width="409" height="409"></canvas>
 
-  <hr>
-  <textarea id="commandRoRun">pload all</textarea>
-  <button id="runCommand">run</button>
-  <hr>
-  <textarea id="commandExecutionResults"></textarea>
-  <hr>
-  <script src="./DRAWEXE.js"></script>
+<hr>
+<textarea id="commandToRun">pload all</textarea>
+<button id="runCommand">run</button>
+<hr>
+<textarea id="commandExecutionResults"></textarea>
+<hr>
 
-  <script>
+<script type="text/javascript" src="drawInterface.js" charset="utf-8"></script>
+
+<script>
+    const commandToRunTextarea = document.getElementById("commandToRun");
+    const commandExecutionResultsTextarea = document.getElementById("commandExecutionResults");
+    const runBtn = document.getElementById("runCommand");
 
     createDRAWEXE().then((theModule) => {
+        runBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            executeTCL(commandToRunTextarea.value)
+        })
 
-      window.draw = theModule;
+        function executeTCL(command) {
+            command.split("\n").forEach(
+                commandPart => {
+                    DRAWEXE.termEvaluateCommand(commandPart)
+                        .then(result => {
+                            commandExecutionResultsTextarea.value = commandExecutionResultsTextarea.value + "\n" + result;
+                        })
+                }
+            )
+        }
+
     });
 
-  </script>
+</script>
 
 </body>
 
