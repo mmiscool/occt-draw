@@ -2,32 +2,72 @@
 <html lang=en-us>
 
 <head>
-  <meta charset=utf-8>
-  <meta content="text/html; charset=utf-8" http-equiv=Content-Type>
-  <title>OCCT Draw Harness</title>
+    <meta charset=utf-8>
+    <meta content="text/html; charset=utf-8" http-equiv=Content-Type>
+    <title>OCCT Draw Harness</title>
 </head>
 
 <body>
 
-  <canvas id=occViewerCanvas oncontextmenu=event.preventDefault() tabindex=-1
-    style="border:0 none;background-color:#000" width="409" height="409"></canvas>
+<canvas id=occViewerCanvas oncontextmenu=event.preventDefault() tabindex=-1
+        style="border:0 none;background-color:#000" width="409" height="409"></canvas>
 
-  <hr>
-  <textarea id="commandRoRun">pload all</textarea>
-  <button id="runCommand">run</button>
-  <hr>
-  <textarea id="commandExecutionResults"></textarea>
-  <hr>
-  <script src="./DRAWEXE.js"></script>
+<hr>
+<textarea id="commandToRun">pload all</textarea>
 
-  <script>
+<button id="runCommandButton">run single command</button>
+<button id="runScriptButton">Run whole script</button>
+
+<hr>
+Results:
+<textarea id="commandExecutionResults"></textarea>
+<hr>
+Errors:
+<textarea id="commandExecutionErrors"></textarea>
+<hr>
+
+<script type="text/javascript" src="drawInterface.js" charset="utf-8"></script>
+
+<script>
+    const commandToRunTextarea = document.getElementById("commandToRun");
+    const commandExecutionResultsTextarea = document.getElementById("commandExecutionResults");
+    const commandExecutionErrorsTextarea = document.getElementById("commandExecutionErrors");
+    const runCommandButton = document.getElementById("runCommandButton");
+    const runScriptButton = document.getElementById("runScriptButton");
 
     createDRAWEXE().then((theModule) => {
+        runScriptButton.addEventListener("click", function (e) {
+            e.preventDefault();
+            executeTCL(commandToRunTextarea.value)
+        });
 
-      window.draw = theModule;
+        runCommandButton.addEventListener("click", async function (e) {
+            e.preventDefault();
+            const result = await DRAWEXE.termEvaluateCommand(commandToRunTextarea.value);
+            alert(result.result ? result.result : result.errors);
+        });
+
+        function executeTCL(command) {
+            command.split("\n").forEach(
+                commandPart => {
+                    DRAWEXE.termEvaluateCommand(commandPart)
+                        .then(result => {
+                            if (result) {
+                                if (result.result) {
+                                    commandExecutionResultsTextarea.value = commandExecutionResultsTextarea.value + "\n" + result.result;
+                                }
+                                if (result.errors) {
+                                    commandExecutionErrorsTextarea.value = commandExecutionErrorsTextarea.value + "\n" + result.errors;
+                                }
+                            }
+                        })
+                }
+            )
+        }
+
     });
 
-  </script>
+</script>
 
 </body>
 
