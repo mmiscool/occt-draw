@@ -14,7 +14,10 @@
 
 <hr>
 <textarea id="commandToRun">pload all</textarea>
-<button id="runCommand">run</button>
+
+<button id="runCommandButton">run single command</button>
+<button id="runScriptButton">Run whole script</button>
+
 <hr>
 Results:
 <textarea id="commandExecutionResults"></textarea>
@@ -29,13 +32,20 @@ Errors:
     const commandToRunTextarea = document.getElementById("commandToRun");
     const commandExecutionResultsTextarea = document.getElementById("commandExecutionResults");
     const commandExecutionErrorsTextarea = document.getElementById("commandExecutionErrors");
-    const runBtn = document.getElementById("runCommand");
+    const runCommandButton = document.getElementById("runCommandButton");
+    const runScriptButton = document.getElementById("runScriptButton");
 
     createDRAWEXE().then((theModule) => {
-        runBtn.addEventListener("click", function (e) {
+        runScriptButton.addEventListener("click", function (e) {
             e.preventDefault();
             executeTCL(commandToRunTextarea.value)
-        })
+        });
+
+        runCommandButton.addEventListener("click", async function (e) {
+            e.preventDefault();
+            const result = await DRAWEXE.termEvaluateCommand(commandToRunTextarea.value);
+            alert(result.result ? result.result : result.errors);
+        });
 
         function executeTCL(command) {
             command.split("\n").forEach(

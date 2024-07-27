@@ -976,7 +976,8 @@ class DrawTerm {
      * C++ std::cerr callback redirecting to Terminal.
      * @param[in] {string} theText text to print
      */
-    printErr(theText) {
+    printErr(theText, level) {
+        console.error("ERROR", theText, level);
         this.printMessage(theText, -1);
     }
 
